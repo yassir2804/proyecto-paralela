@@ -12,6 +12,11 @@ Controladora::~Controladora()
     }
 }
 
+Navegador* Controladora::getNavegador() const
+{
+    return navegador;
+}
+
 void Controladora::control0()
 {
    
@@ -36,13 +41,13 @@ void Controladora::control0()
             case 5: // Busqueda y filtros
                 control5();
                 break;
-            case 6: // Activar / desactivar modo incógnito
+            case 6: // Activar / desactivar modo incï¿½gnito
                 control6();
                 break;
-            case 7: // Nueva pestaña
+            case 7: // Nueva pestaï¿½a
                 control7();
                 break;
-            case 8: // Nueva pestaña
+            case 8: // Nueva pestaï¿½a
                 control8();
                 break;
             case 9: // salir
@@ -127,10 +132,10 @@ void Controladora::control5()
             Sleep(300);
             opcion = Interfaz::detectarTecla(navegador, 0);
             switch (opcion) {
-            case 1: // búsqueda por filtro
+            case 1: // bï¿½squeda por filtro
                 control5_1();
                 break;
-            case 2: // búsqueda por palabra clave
+            case 2: // bï¿½squeda por palabra clave
                 control5_2();
                 break;
             case 3: // eliminamos filtro
@@ -154,7 +159,7 @@ void Controladora::control6()
 	Interfaz::cambiarModoIncognito(navegador);
 
 }
-// nueva pestaña
+// nueva pestaï¿½a
 void Controladora::control7()
 {
     Interfaz::agregarPestania(navegador);
@@ -209,12 +214,12 @@ void Controladora::control11()
 {
     Interfaz::paginaSiguiente(navegador);
 }
-// pestaña anterior
+// pestaï¿½a anterior
 void Controladora::control12()
 {
     Interfaz::pestaniaAnterior(navegador);
 }
-// pestaña siguiente
+// pestaï¿½a siguiente
 void Controladora::control13()
 {
     Interfaz::pestaniaSiguiente(navegador);

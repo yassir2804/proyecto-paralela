@@ -2,6 +2,7 @@
 
 
 ConfigHistorial* ConfigHistorial::instancia = nullptr;
+std::mutex ConfigHistorial::mtx;
 
 ConfigHistorial::ConfigHistorial()
 {
@@ -21,12 +22,14 @@ void ConfigHistorial::destruirInstancia()
 
 ConfigHistorial* ConfigHistorial::getInstancia()
 {
-    if (!instancia){
-		instancia = new ConfigHistorial();
-		atexit(&destruirInstancia);
+    if (!instancia) {
+        std::lock_guard<std::mutex> lock(mtx);
+        if (!instancia) {
+            instancia = new ConfigHistorial();
+            atexit(&destruirInstancia);
+        }
     }
     return instancia;
- 
 }
 
 ConfigHistorial::ConfigHistorial(int maxEntradas, int tiempoMax)

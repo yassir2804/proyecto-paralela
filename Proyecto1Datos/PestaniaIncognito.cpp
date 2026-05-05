@@ -87,13 +87,8 @@ int PestaniaIncognito::sizeHistorial() const
 
 void PestaniaIncognito::agregarPaginaWeb(SitioWeb* sitioWeb)
 {
-    if (sitio) {
-        delete sitio;
-        this->sitio =  new SitioWeb (*sitioWeb);
-    }
-
-	this->sitio = new SitioWeb(*sitioWeb);
-    
+    delete sitio;
+    sitio = new SitioWeb(*sitioWeb);
 }
 
 void PestaniaIncognito::irAtras()

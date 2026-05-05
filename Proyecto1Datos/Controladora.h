@@ -10,6 +10,7 @@ private:
 public:
 	Controladora();
 	~Controladora();
+	Navegador* getNavegador() const;
 
 
 	// menu principal
@@ -21,16 +22,16 @@ public:
 	void control4(); // mostrar bookmarks
 	void control5(); // busqueda y filtros
 	void control6(); // activar/desactivar modo incognito
-	void control7(); // nueva pestaña
+	void control7(); // nueva pestaï¿½a
 	void control8(); //configuracion de historial
 	void control9();  // mensaje de salida
 
-	// logica pestañas - paginas
+	// logica pestaï¿½as - paginas
 
 	void control10(); // pagina anterior
 	void control11(); // pagina siguiente
-	void control12();// pestaña anterior
-	void control13();// pestaña siguiente
+	void control12();// pestaï¿½a anterior
+	void control13();// pestaï¿½a siguiente
 
 	//funciones de menu navegador
 

@@ -66,8 +66,7 @@ public:
 	static Navegador* cargarArchivoNavegador(std::ifstream& in);
 
 	void cargarArchivoSitiosWebCSV(const std::string& rutaArchivo);
-
-
+	std::vector<SitioWeb*> busquedaMasiva(const std::string& palabraClave);
 
 	//Metodos de configuracion
 	ConfigHistorial* getConfiguraciones() const;

@@ -225,8 +225,6 @@ SitioWeb* Navegador::buscarPaginaWeb(const std::string url)
 	}
 
 	throw ExcepcionGenerica("404 - Not Found");
-
-	return nullptr;
 }
 
 void Navegador::paginaAnterior()
@@ -363,6 +361,32 @@ void Navegador::reiniciarConfiguraciones()
 {
 	configuracion->setMaxEntradas(-1);
 	configuracion->setTiempoMaximo(-1);
+}
+
+// Busqueda secuencial: recorre todos los sitios de la base de datos
+// y retorna los que coinciden con la palabra clave en titulo o URL.
+// Esta funcion es el candidato principal para paralelizacion con OpenMP.
+std::vector<SitioWeb*> Navegador::busquedaMasiva(const std::string& palabraClave)
+{
+	std::vector<SitioWeb*> resultados;
+
+	std::string palabraLower = palabraClave;
+	std::transform(palabraLower.begin(), palabraLower.end(), palabraLower.begin(), ::tolower);
+
+	for (int i = 0; i < (int)sitios.size(); i++) {
+		std::string titulo = sitios[i]->getTitulo();
+		std::transform(titulo.begin(), titulo.end(), titulo.begin(), ::tolower);
+
+		std::string url = sitios[i]->getUrl();
+		std::transform(url.begin(), url.end(), url.begin(), ::tolower);
+
+		if (titulo.find(palabraLower) != std::string::npos ||
+			url.find(palabraLower) != std::string::npos) {
+			resultados.push_back(sitios[i]);
+		}
+	}
+
+	return resultados;
 }
 
 

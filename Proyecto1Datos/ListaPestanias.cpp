@@ -232,3 +232,28 @@ void ListPestanias::irAdelante()
 		(*posicionActual)->irAdelante();
 	}
 }
+
+// Busca la palabra clave en el historial de TODAS las pestanias (no solo la actual)
+std::string ListPestanias::busquedaEnTodasPestanias(const std::string& palabraClave)
+{
+    std::stringstream ss;
+    for (auto& pestania : pestanias) {
+        ss << pestania->busquedaPalabraClave(palabraClave);
+    }
+    return ss.str();
+}
+
+// Cuenta cuantas veces se visito cada dominio sumando todos los historiales
+std::map<std::string, int> ListPestanias::generarConteoTodasPestanias()
+{
+    std::map<std::string, int> conteo;
+    for (auto& pestania : pestanias) {
+        Historial* h = pestania->getHistorial();
+        if (h) {
+            for (SitioWeb* sitio : h->getHistorial()) {
+                conteo[sitio->getDominio()]++;
+            }
+        }
+    }
+    return conteo;
+}

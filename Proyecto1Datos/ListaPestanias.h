@@ -1,6 +1,7 @@
 #pragma once
 #include "Pestania.h"
 #include "PestaniaIncognito.h"
+#include <map>
 
 class ListPestanias
 {
@@ -46,6 +47,8 @@ public:
 	bool limpiarSitiosViejos();
 	void setFiltro(const std::string& filtro);
 	std::string busquedaPalabraClave(const std::string& palabraClave);
+	std::string busquedaEnTodasPestanias(const std::string& palabraClave);
+	std::map<std::string, int> generarConteoTodasPestanias();
 	void moverseAPrimeraCoincidencia();
 
 

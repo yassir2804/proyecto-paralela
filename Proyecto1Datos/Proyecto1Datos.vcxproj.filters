@@ -1,0 +1,99 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\Interfaz">
+      <UniqueIdentifier>{352f104c-1cd2-4f30-b900-5d9ef06cf7a9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Interfaz">
+      <UniqueIdentifier>{f71cbae3-7377-425b-92d1-1f8f2dd39201}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="PestaniaAbstracta.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Marcador.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SitioWeb.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Historial.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConfigHistorial.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Navegador.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Controladora.h">
+      <Filter>Header Files\Interfaz</Filter>
+    </ClInclude>
+    <ClInclude Include="Interfaz.h">
+      <Filter>Header Files\Interfaz</Filter>
+    </ClInclude>
+    <ClInclude Include="Excepciones.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ListaPestanias.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Pestania.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PestaniaIncognito.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Pestania.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Marcador.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SitioWeb.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Historial.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ConfigHistorial.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Navegador.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Controladora.cpp">
+      <Filter>Source Files\Interfaz</Filter>
+    </ClCompile>
+    <ClCompile Include="Excepciones.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ListaPestanias.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Interfaz.cpp">
+      <Filter>Source Files\Interfaz</Filter>
+    </ClCompile>
+    <ClCompile Include="PestaniaIncognito.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

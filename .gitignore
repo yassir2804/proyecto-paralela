@@ -1,0 +1,12 @@
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.idb
+tmpclaude-*
+nul
+.vs/
+x64/
+x86/
+Debug/
+Release/

@@ -1,5 +1,11 @@
 #include "Navegador.h"
 #include <algorithm>
+#include <chrono>
+#include <fstream>
+#include <iostream>
+#include <omp.h>
+#include <sstream>
+#include <vector>
 
 
 Navegador::Navegador()
@@ -216,12 +222,33 @@ SitioWeb* Navegador::getSitioActual()
 
 SitioWeb* Navegador::buscarPaginaWeb(const std::string url)
 {
-	auto it = std::find_if(sitios.begin(), sitios.end(), [&](SitioWeb* sitio) {
-		return sitio->getUrl() == url;
-		});
+	auto startTime = std::chrono::high_resolution_clock::now();
+	SitioWeb* resultado = nullptr;
+	int idxEncontrado = (int)sitios.size();
 
-	if (it != sitios.end()) {
-		return *it;  
+#pragma omp parallel for shared(resultado, idxEncontrado)
+	for (int i = 0; i < (int)sitios.size(); i++) {
+#pragma omp flush(idxEncontrado)
+		if (i >= idxEncontrado) {
+			continue;
+		}
+		if (sitios[i]->getUrl() == url) {
+#pragma omp critical
+			{
+				if (i < idxEncontrado) {
+					idxEncontrado = i;
+					resultado = sitios[i];
+				}
+			}
+		}
+	}
+
+	auto endTime = std::chrono::high_resolution_clock::now();
+	auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+	std::cout << "[Tiempo] Navegador::buscarPaginaWeb: " << elapsedUs << " us" << std::endl;
+
+	if (resultado) {
+		return resultado;
 	}
 
 	throw ExcepcionGenerica("404 - Not Found");
@@ -313,29 +340,46 @@ Navegador* Navegador::cargarArchivoNavegador(std::ifstream& in)
 // leemos los 3 campos de la linea (url,titulo, dominio)
 void Navegador::cargarArchivoSitiosWebCSV(const std::string& rutaArchivo) 
 {
+	auto startTime = std::chrono::high_resolution_clock::now();
 	std::ifstream archivo(rutaArchivo);
 
 	if (!archivo.is_open()) {
 		throw ExcepcionGenerica("Error al abrir el archivo CSV: " + rutaArchivo);
 	}
 
+	std::vector<std::string> lineas;
 	std::string linea;
 	while (std::getline(archivo, linea)) {
-		std::stringstream ss(linea);
+		if (!linea.empty()) {
+			lineas.push_back(linea);
+		}
+	}
+
+	std::vector<SitioWeb*> temp(lineas.size(), nullptr);
+
+#pragma omp parallel for schedule(static)
+	for (int i = 0; i < (int)lineas.size(); i++) {
+		std::istringstream ss(lineas[i]);
 		std::string url, titulo, dominio;
-
-
 		if (std::getline(ss, url, ',') &&
 			std::getline(ss, titulo, ',') &&
 			std::getline(ss, dominio))
 		{
+			temp[i] = new SitioWeb(url, titulo, dominio);
+		}
+	}
 
-			SitioWeb* sitio = new SitioWeb(url, titulo, dominio);
+	for (auto* sitio : temp) {
+		if (sitio) {
 			sitios.push_back(sitio);
 		}
 	}
 
 	archivo.close();
+
+	auto endTime = std::chrono::high_resolution_clock::now();
+	auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+	std::cout << "[Tiempo] Navegador::cargarArchivoSitiosWebCSV: " << elapsedUs << " us" << std::endl;
 }
 
 

@@ -2,6 +2,7 @@
 
 
 ConfigHistorial* ConfigHistorial::instancia = nullptr;
+std::mutex ConfigHistorial::instanciaMutex;
 
 ConfigHistorial::ConfigHistorial()
 {
@@ -11,6 +12,7 @@ ConfigHistorial::ConfigHistorial()
 
 void ConfigHistorial::destruirInstancia()
 {
+    std::lock_guard<std::mutex> lock(instanciaMutex);
 	if (instancia != nullptr)
 	{
 		delete instancia;
@@ -22,8 +24,11 @@ void ConfigHistorial::destruirInstancia()
 ConfigHistorial* ConfigHistorial::getInstancia()
 {
     if (!instancia){
-		instancia = new ConfigHistorial();
-		atexit(&destruirInstancia);
+        std::lock_guard<std::mutex> lock(instanciaMutex);
+        if (!instancia) {
+            instancia = new ConfigHistorial();
+            atexit(&destruirInstancia);
+        }
     }
     return instancia;
  

@@ -4,22 +4,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Windows console-based **web browser simulator** built in C++14. Simulates tab management, bidirectional history navigation, bookmarks, incognito mode, and session persistence. The project is being extended for parallelization (concurrent operations on data structures).
+A Windows console-based **web browser simulator** built in C++14. Simulates tab management, bidirectional history navigation, bookmarks, incognito mode, and session persistence. The project has two coexisting versions for a parallelization study: a sequential baseline with benchmarks and a parallel version that still needs OpenMP implementation.
+
+## Repository Structure
+
+```
+proyecto-paralela/
+├── version-secuencial/   ← benchmark runner (NOT the interactive app)
+├── version-paralela/     ← interactive browser app (OpenMP not yet implemented)
+├── Proyecto1Datos/       ← original Visual Studio source files
+├── UnitTest/             ← Google Test project
+├── PARALELIZACION.md     ← OpenMP implementation guide with ready-to-use code
+└── comparar.bat          ← diff script between both versions
+```
+
+## CRITICAL: What each version actually contains
+
+**`version-secuencial/`** — The sequential benchmark runner:
+- `Source.cpp` replaces `main()` with a timing harness that measures 5 functions and saves results to `reporte_secuencial.txt`
+- Adds `Navegador::busquedaMasiva()` — a new function that searches all 1000 sites in the DB
+- `ConfigHistorial::getInstancia()` is **thread-safe** (double-checked locking with `std::mutex`)
+- Does NOT run the interactive browser UI — it runs benchmarks and exits
+
+**`version-paralela/`** — The interactive browser (base app, OpenMP NOT yet added):
+- `Source.cpp` is the standard `main()` → `Controladora::control0()` loop (interactive UI)
+- `ConfigHistorial::getInstancia()` is **NOT thread-safe** (no mutex)
+- Has 1000-site CSV (`sitiosWeb.csv`) but no `#pragma omp` anywhere in the code
+- This is where OpenMP parallelization still needs to be implemented
+
+**The parallel version is not done yet.** `PARALELIZACION.md` contains the ready-to-apply OpenMP code for `busquedaMasiva`, `limpiarSitiosViejos`, and `cargarArchivoSitiosWebCSV`.
 
 ## Build
 
 **Compiler:** g++ (MinGW) or MSVC (Visual Studio 2022), C++14, Windows only (`<windows.h>` dependency).
 
+From inside `version-secuencial/` or `version-paralela/`:
 ```bat
-g++ -std=c++14 -o navegador.exe Source.cpp Controladora.cpp Navegador.cpp Interfaz.cpp Historial.cpp ListaPestanias.cpp Pestania.cpp PestaniaIncognito.cpp SitioWeb.cpp Marcador.cpp ConfigHistorial.cpp Excepciones.cpp -I.
+compilar.bat
 ```
 
-Or run the provided batch script:
+Or manually:
 ```bat
-compilar_y_ejecutar.bat
-```
+# Sequential benchmark runner
+g++ -std=c++14 -o navegador_secuencial.exe Source.cpp Controladora.cpp Navegador.cpp Interfaz.cpp Historial.cpp ListaPestanias.cpp Pestania.cpp PestaniaIncognito.cpp SitioWeb.cpp Marcador.cpp ConfigHistorial.cpp Excepciones.cpp -I.
 
-For OpenMP parallel builds, add `-fopenmp` to the g++ command.
+# Parallel version (once OpenMP is added)
+g++ -std=c++14 -fopenmp -o navegador_paralelo.exe Source.cpp Controladora.cpp Navegador.cpp Interfaz.cpp Historial.cpp ListaPestanias.cpp Pestania.cpp PestaniaIncognito.cpp SitioWeb.cpp Marcador.cpp ConfigHistorial.cpp Excepciones.cpp -I.
+```
 
 Orphaned files — do NOT include in compilation: `Sesion.cpp`, `ListPestanias.cpp`, `AdminPestanias.h`.
 
@@ -34,7 +65,14 @@ msbuild UnitTest\UnitTest.vcxproj /p:Configuration=Debug
 UnitTest\Debug\UnitTest.exe
 ```
 
-Tests are in `UnitTest/test.cpp`. There is also a manual functional test plan (CP-01 through CP-20) documented separately covering all UI flows.
+Tests are in `UnitTest/test.cpp`.
+
+## Comparing both versions
+
+```bat
+comparar.bat                  # shows which files differ between both versions
+comparar.bat Historial.cpp    # shows line-by-line diff for a specific file
+```
 
 ## Architecture
 
@@ -51,27 +89,34 @@ main() → Controladora::control0() [main loop]
     ├── ListaPestanias  →  PestaniaAbstracta
     │                      ├── Pestania  →  Historial  →  std::list<SitioWeb*>
     │                      └── PestaniaIncognito  (single SitioWeb*, no history)
-    ├── std::vector<SitioWeb*>  (16-site CSV database, loaded from sitios.csv)
+    ├── std::vector<SitioWeb*>  (1000-site CSV database, loaded from sitiosWeb.csv)
     ├── std::list<Marcador*>    (global bookmarks)
     └── ConfigHistorial*        (singleton: maxEntradas, tiempoMaximo)
 ```
 
 ## Key Implementation Details
 
-- **Navigation**: `Historial` uses `std::list<SitioWeb*>` with an iterator (`posicionActual`) for O(1) forward/back. Going back then visiting a new page truncates forward history (erases elements after `posicionActual`).
-- **Tabs**: `ListaPestanias` uses `std::list<PestaniaAbstracta*>` with an iterator for the active tab. Tab-local history is isolated per tab.
-- **Incognito tabs**: `PestaniaIncognito` holds only `SitioWeb* sitioActual` — no history, no bookmarks. Type is detected via `getTipo()` returning `"incognito"`.
-- **Session persistence**: Binary serialization in `Navegador` (`guardarSesion()`/`cargarSesion()`). Saves tab count, each tab's type and history entries (URL + title), bookmarks, and config. File: `sesion.dat`.
-- **Site database**: `cargarSitiosDesdeCSV()` reads `sitios.csv` into `std::vector<SitioWeb*> sitiosDisponibles` (16 entries). Searches scan this vector linearly.
-- **History cleanup**: `limpiarSitiosViejos()` compares `std::chrono` timestamps against `ConfigHistorial::tiempoMaximo` — currently called every loop iteration (performance issue).
-- **Keyboard input**: `Interfaz::detectarTecla()` uses `PeekConsoleInput` (non-blocking) to poll for key presses; returns `'\0'` when no input is available.
+- **Navigation**: `Historial` uses `std::list<SitioWeb*>` with an iterator (`posicionActual`) for O(1) forward/back. Going back then visiting a new page truncates forward history.
+- **Tabs**: `ListaPestanias` uses `std::list<PestaniaAbstracta*>` with an iterator for the active tab.
+- **Incognito tabs**: `PestaniaIncognito` holds only `SitioWeb* sitioActual` — no history, no bookmarks. Detected via `getTipo()` returning `"incognito"`.
+- **Session persistence**: Binary serialization in `Navegador` (`guardarSesion()`/`cargarSesion()`). File: `sesion.dat`.
+- **Site database**: `cargarArchivoSitiosWebCSV()` reads `sitiosWeb.csv` into `std::vector<SitioWeb*> sitios`. The 1000-site version enables meaningful benchmark measurements.
+- **busquedaMasiva()**: Added in `version-secuencial/Navegador.cpp` — linear scan over all sites matching keyword in title or URL. This is the primary OpenMP candidate.
+- **Keyboard input**: `Interfaz::detectarTecla()` uses `PeekConsoleInput` (non-blocking); returns `'\0'` when no input.
 
-## Known Issues (relevant for parallelization work)
+## Parallelization Status
 
-- `ConfigHistorial::getInstancia()` is not thread-safe (no mutex on lazy initialization — classic double-checked locking problem).
-- `limpiarSitiosViejos()` runs every loop iteration instead of periodically — candidate for a background thread with a sleep interval.
-- All searches (`buscarPaginaWeb`, `busquedaPalabraClave`, filter methods) are O(n) linear scans — candidates for parallel execution with OpenMP or `std::async`.
-- Memory leak in `PestaniaIncognito::agregarPaginaWeb()`: allocates a new `SitioWeb` then immediately overwrites `sitioActual`, losing the old pointer without deleting it.
-- `Navegador.cpp` is missing `#include <algorithm>` (compiles in MSVC but fails in strict g++).
-- `Navegador::buscarPaginaWeb()` has unreachable `return nullptr` after a `throw` — harmless but indicates incomplete error handling design.
-- No smart pointers anywhere — all ownership is manual raw pointers with no RAII. Adding threads requires careful attention to object lifetimes.
+| What | Where to add OpenMP | Status |
+|------|--------------------|----|
+| `busquedaMasiva()` | `version-paralela/Navegador.cpp` | NOT done — `#pragma omp parallel for` + `omp_set_num_threads` |
+| `limpiarSitiosViejos()` | `version-paralela/Historial.cpp` | NOT done |
+| `cargarArchivoSitiosWebCSV()` | `version-paralela/Navegador.cpp` | NOT done |
+| `ConfigHistorial` singleton | `version-paralela/ConfigHistorial.cpp` | NOT done — needs mutex like in `version-secuencial` |
+
+See `PARALELIZACION.md` for ready-to-paste OpenMP code for each function.
+
+## Known Issues
+
+- Memory leak in `PestaniaIncognito::agregarPaginaWeb()`: allocates a new `SitioWeb` then overwrites `sitioActual` without deleting the old pointer.
+- No smart pointers anywhere — all ownership is manual raw pointers.
+- `limpiarSitiosViejos()` is called every main loop iteration instead of periodically.

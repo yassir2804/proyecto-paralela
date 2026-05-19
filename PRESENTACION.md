@@ -1,100 +1,138 @@
-# Paralelización de un Simulador de Navegador Web en C++
-## Programación Paralela — Universidad Nacional de Costa Rica (UNA)
-### Ciclo I 2026 · Yassir Jiménez Carballo
+# PRESENTACIÓN — DIAPOSITIVAS PARA CANVA
+> Cada sección `---SLIDE---` es una diapositiva independiente.
 
----
+---SLIDE 1 — PORTADA---
 
-## 1. ¿Qué es el proyecto original?
+# Paralelización de un Simulador de Navegador Web
+## De Estructuras de Datos a Programación Paralela
 
-### Descripción
+**Universidad Nacional de Costa Rica**
+Facultad de Ciencias Exactas y Naturales · Escuela de Informática
 
-El proyecto base es un **simulador de navegador web en consola** desarrollado en C++14 para Windows. Implementa las funcionalidades principales de un navegador moderno pero en modo texto, sin interfaz gráfica:
+Programación Paralela — EIF-XXX
+Ciclo I 2026 · Yassir Jiménez Carballo
 
-- **Pestañas múltiples** con cambio dinámico entre ellas
-- **Historial bidireccional** (avanzar/retroceder, truncamiento de historial futuro)
-- **Marcadores** (bookmarks) persistentes entre sesiones
-- **Modo incógnito** (sin historial, sin bookmarks)
-- **Persistencia de sesión** via serialización binaria (`sesion.dat`)
-- **Base de datos de 1 000 sitios web** cargada desde un CSV
+---SLIDE 2 — EL PROYECTO ORIGINAL---
 
-### Arquitectura
+# ¿Qué es el proyecto original?
 
-El proyecto sigue el patrón **MVC**:
+**Curso:** EIF207 – Estructuras de Datos
+**Entregado:** Septiembre 2024 · Valor 20% de la nota
+
+### ¿Qué debíamos construir?
+Un **simulador de navegador web en consola** con:
+- Historial de navegación (atrás / adelante con flechas)
+- Múltiples pestañas con historial independiente
+- Sistema de marcadores con búsqueda y etiquetas
+- Modo incógnito (sin historial ni bookmarks)
+- Importación / exportación de sesión en binario
+- Políticas de historial: límite de entradas y tiempo máximo
+- Carga de 1 000 sitios web desde un CSV
+
+**Restricción del curso:** estrictamente prohibido usar hilos.
+
+---SLIDE 3 — CONOCIMIENTO EN AQUEL MOMENTO---
+
+# ¿Qué sabíamos entonces?
+
+| Tema | Nivel |
+|------|-------|
+| C++ (punteros, herencia, STL) | Intermedio |
+| Estructuras lineales (list, vector, stack) | Sólido |
+| Serialización binaria | Básico |
+| Programación orientada a objetos | Sólido |
+| Concurrencia / hilos | **Ninguno** — no estaba en el plan del curso |
+| OpenMP / paralelismo | **Ninguno** |
+
+El proyecto se desarrolló 100 % secuencial por diseño del curso.
+Todo el código corre en **1 solo hilo**.
+
+---SLIDE 4 — ARQUITECTURA---
+
+# Arquitectura del proyecto (MVC)
 
 ```
-main() → Controladora::control0() [bucle principal]
-    ↓
-    Navegador  (coordinador central; dueño de todo el estado)
-    ├── ListaPestanias  →  PestaniaAbstracta
-    │                      ├── Pestania  →  Historial  →  std::list<SitioWeb*>
-    │                      └── PestaniaIncognito  (sin historial)
-    ├── std::vector<SitioWeb*>  (1 000 sitios desde sitiosWeb.csv)
-    ├── std::list<Marcador*>    (marcadores globales)
-    └── ConfigHistorial*        (singleton: maxEntradas, tiempoMaximo)
+main()  →  Controladora::control0()  [bucle principal]
+               ↓
+           Navegador  (coordinador central)
+           ├── ListaPestanias  →  PestaniaAbstracta
+           │                      ├── Pestania  →  Historial  →  std::list<SitioWeb*>
+           │                      └── PestaniaIncognito  (sin historial)
+           ├── std::vector<SitioWeb*>   ← 1 000 sitios del CSV
+           ├── std::list<Marcador*>     ← bookmarks globales
+           └── ConfigHistorial*         ← singleton (maxEntradas, tiempoMaximo)
 ```
 
-### Curso y nivel de conocimiento
+**Clases principales:** SitioWeb · Historial · Marcador · ConfigHistorial
+**Vista:** Interfaz (Windows Console API, PeekConsoleInput)
+**Controlador:** Controladora (13 submenús, routing de teclado)
 
-| Aspecto | Detalle |
-|---------|---------|
-| Curso | Estructuras de Datos — UNA |
-| Nivel del equipo | C++ intermedio (punteros, herencia, STL) |
-| Paradigma base | Programación orientada a objetos, MVC |
-| Plataforma | Windows (usa `<windows.h>`, `PeekConsoleInput`) |
-| Compilador | g++ (MinGW) / MSVC, estándar C++14 |
+---SLIDE 5 — ¿POR QUÉ LO ELEGIMOS?---
 
----
+# ¿Por qué elegimos este proyecto para paralelizar?
 
-## 2. ¿Por qué fue elegido para paralelización?
+1. **Ya teníamos prohibido usar hilos** — era la oportunidad perfecta para ver qué ganábamos si los usábamos.
 
-### Candidatos identificados
+2. **Operaciones sobre colecciones grandes e independientes** — buscar en 1 000 sitios, limpiar historial, cargar CSV: cada elemento se puede evaluar sin depender del anterior.
 
-El simulador realiza 5 operaciones que son intrínsecamente paralelizables porque procesan colecciones independientes (sin dependencias entre elementos):
+3. **Cuello de botella claro** — `cargarArchivoSitiosWebCSV()` consumía el **79.6 %** del tiempo total secuencial. La Ley de Amdahl señalaba directamente ahí.
 
-| Función | Estructura | Tipo de trabajo |
-|---------|-----------|-----------------|
-| `busquedaMasiva()` | `vector<SitioWeb*>` (1 000) | Búsqueda lineal con predicado |
-| `buscarPaginaWeb()` | `vector<SitioWeb*>` (1 000) | Búsqueda con early-exit |
-| `cargarArchivoSitiosWebCSV()` | Líneas de CSV | Parseo de objetos independientes |
-| `busquedaPalabraClave()` | `list<SitioWeb*>` (historial) | Filtro por keyword |
-| `limpiarSitiosViejos()` | `list<SitioWeb*>` (historial) | Filtro por timestamp |
+4. **Variedad de patrones** — el proyecto permite demostrar tres esquemas distintos de paralelismo: búsqueda simple, pipeline IO-cómputo, y 2 fases para estructuras no thread-safe.
 
-### Justificación técnica
+5. **Contexto académico real** — no es un ejemplo inventado: es código que ya usamos, con datos reales (1 000 sitios), lo que hace la comparación honesta y significativa.
 
-1. **Trabajo por datos** (data parallelism): cada sitio web o entrada de historial puede evaluarse sin conocer los demás resultados.
-2. **Carga real**: la base de datos de 1 000 sitios provee suficiente trabajo para medir diferencias.
-3. **Punto caliente medible**: `cargarArchivoSitiosWebCSV()` representa el **79.6 %** del tiempo total secuencial — candidato natural según la Ley de Amdahl.
-4. **Variedad de patrones**: permite demostrar tres patrones distintos de OpenMP:
-   - `parallel for` simple (busquedaMasiva)
-   - `parallel for` con `critical` (buscarPaginaWeb con early-exit)
-   - Pipeline en 2 fases: paralelo para evaluar, secuencial para modificar (limpiarSitiosViejos con `std::list`)
+---SLIDE 6 — LAS 5 FUNCIONES (RESUMEN)---
 
----
+# Las 5 funciones que paralelizamos
 
-## 3. Funciones paralelizadas (código)
+| # | Función | Archivo | Patrón OpenMP |
+|---|---------|---------|---------------|
+| 1 | `busquedaMasiva()` | Navegador.cpp | `parallel for` + compactación |
+| 2 | `buscarPaginaWeb()` | Navegador.cpp | `parallel for` + `critical` + early-exit |
+| 3 | `cargarArchivoSitiosWebCSV()` | Navegador.cpp | Pipeline: IO serial → parseo paralelo → merge serial |
+| 4 | `busquedaPalabraClave()` | Historial.cpp | `parallel for schedule(dynamic)` |
+| 5 | `limpiarSitiosViejos()` | Historial.cpp | 2 fases: evaluación paralela + borrado serial |
 
-Se paralelizaron **5 funciones** usando OpenMP 4.5. A continuación, el fragmento clave de cada una.
+**Bonus:** `ConfigHistorial` (singleton) refactorizado con `std::mutex` para ser thread-safe.
 
-### Función 1 — `busquedaMasiva()` en `Navegador.cpp`
+---SLIDE 7A — FUNCIÓN 1: busquedaMasiva---
 
-Búsqueda masiva sobre los 1 000 sitios de la base de datos. Patrón: `parallel for` con reducción manual a vector de resultados.
+# Función 1 — `busquedaMasiva()`
 
+### ANTES (secuencial)
 ```cpp
-// FUNCION PARALELIZADA 1: busquedaMasiva
+std::vector<SitioWeb*> Navegador::busquedaMasiva(const std::string& palabraClave) {
+    std::vector<SitioWeb*> resultado;
+    for (int i = 0; i < (int)sitios.size(); i++) {
+        std::string titulo = sitios[i]->getTitulo();
+        std::string url    = sitios[i]->getUrl();
+        std::transform(titulo.begin(), titulo.end(), titulo.begin(), ::tolower);
+        std::transform(url.begin(), url.end(), url.begin(), ::tolower);
+        std::string kw = palabraClave;
+        std::transform(kw.begin(), kw.end(), kw.begin(), ::tolower);
+        if (titulo.find(kw) != std::string::npos || url.find(kw) != std::string::npos)
+            resultado.push_back(sitios[i]);
+    }
+    return resultado;
+}
+```
+
+### DESPUÉS (paralelo)
+```cpp
 std::vector<SitioWeb*> Navegador::busquedaMasiva(const std::string& palabraClave) {
     int n = (int)sitios.size();
-    std::vector<SitioWeb*> resultados(n, nullptr);
+    std::vector<SitioWeb*> resultados(n, nullptr);   // ← índices fijos, sin race condition
 
     #pragma omp parallel for schedule(dynamic, 64) shared(resultados)
     for (int i = 0; i < n; i++) {
         std::string titulo = sitios[i]->getTitulo();
         std::string url    = sitios[i]->getUrl();
         std::transform(titulo.begin(), titulo.end(), titulo.begin(), ::tolower);
-        std::transform(url.begin(),   url.end(),   url.begin(),   ::tolower);
+        std::transform(url.begin(), url.end(), url.begin(), ::tolower);
         std::string kw = palabraClave;
         std::transform(kw.begin(), kw.end(), kw.begin(), ::tolower);
         if (titulo.find(kw) != std::string::npos || url.find(kw) != std::string::npos)
-            resultados[i] = sitios[i];
+            resultados[i] = sitios[i];               // ← cada hilo escribe en su propio índice
     }
 
     std::vector<SitioWeb*> compacto;
@@ -102,27 +140,35 @@ std::vector<SitioWeb*> Navegador::busquedaMasiva(const std::string& palabraClave
     return compacto;
 }
 ```
+**Cambio clave:** en vez de `push_back` (no thread-safe), pre-allocamos el vector con índices fijos — cada hilo escribe solo en su posición sin tocar las demás.
 
----
+---SLIDE 7B — FUNCIÓN 2: buscarPaginaWeb---
 
-### Función 2 — `buscarPaginaWeb()` en `Navegador.cpp`
+# Función 2 — `buscarPaginaWeb()`
 
-Búsqueda de primera coincidencia con early-exit paralelo usando `#pragma omp flush` y `critical`.
-
+### ANTES (secuencial)
 ```cpp
-// FUNCION PARALELIZADA 2: buscarPaginaWeb
 SitioWeb* Navegador::buscarPaginaWeb(const std::string url) {
-    SitioWeb* resultado = nullptr;
-    int idxEncontrado = (int)sitios.size();
+    for (auto& s : sitios)
+        if (s->getUrl() == url) return s;
+    return nullptr;
+}
+```
+
+### DESPUÉS (paralelo con early-exit)
+```cpp
+SitioWeb* Navegador::buscarPaginaWeb(const std::string url) {
+    SitioWeb* resultado    = nullptr;
+    int idxEncontrado      = (int)sitios.size();   // ← "no encontrado aún"
 
     #pragma omp parallel for shared(resultado, idxEncontrado)
     for (int i = 0; i < (int)sitios.size(); i++) {
-        #pragma omp flush(idxEncontrado)
-        if (i >= idxEncontrado) continue;
+        #pragma omp flush(idxEncontrado)            // ← ver el valor actualizado por otros hilos
+        if (i >= idxEncontrado) continue;           // ← saltarse trabajo innecesario
         if (sitios[i]->getUrl() == url) {
             #pragma omp critical
             {
-                if (i < idxEncontrado) {
+                if (i < idxEncontrado) {            // ← guardar el índice más bajo encontrado
                     idxEncontrado = i;
                     resultado = sitios[i];
                 }
@@ -132,24 +178,39 @@ SitioWeb* Navegador::buscarPaginaWeb(const std::string url) {
     return resultado;
 }
 ```
+**Cambio clave:** el secuencial para al primer match con `return`; en paralelo no se puede salir del loop, pero con `flush` + `critical` los hilos ignoran índices mayores al ya encontrado.
 
----
+---SLIDE 7C — FUNCIÓN 3: cargarArchivoSitiosWebCSV---
 
-### Función 3 — `cargarArchivoSitiosWebCSV()` en `Navegador.cpp`
+# Función 3 — `cargarArchivoSitiosWebCSV()`
 
-Carga paralela del CSV usando pipeline de 3 fases: IO serial → parseo paralelo → consolidación serial.
-
+### ANTES (secuencial)
 ```cpp
-// FUNCION PARALELIZADA 3: cargarArchivoSitiosWebCSV (pipeline 3 fases)
 void Navegador::cargarArchivoSitiosWebCSV(const std::string& rutaArchivo) {
-    // FASE 1 (serial): lectura de IO — los archivos no son thread-safe
+    std::ifstream archivo(rutaArchivo);
+    std::string linea;
+    while (std::getline(archivo, linea)) {
+        if (linea.empty()) continue;
+        std::stringstream ss(linea);
+        std::string url, titulo, dominio;
+        if (std::getline(ss, url, ',') && std::getline(ss, titulo, ',') &&
+            std::getline(ss, dominio))
+            sitios.push_back(new SitioWeb(url, titulo, dominio));
+    }
+}
+```
+
+### DESPUÉS (pipeline 3 fases)
+```cpp
+void Navegador::cargarArchivoSitiosWebCSV(const std::string& rutaArchivo) {
+    // FASE 1 — serial: la IO de archivos no es thread-safe
     std::vector<std::string> lineas;
     std::ifstream archivo(rutaArchivo);
     std::string linea;
     while (std::getline(archivo, linea))
         if (!linea.empty()) lineas.push_back(linea);
 
-    // FASE 2 (paralelo): construcción de objetos — cada línea es independiente
+    // FASE 2 — paralelo: construir objetos, cada línea es independiente
     int n = (int)lineas.size();
     std::vector<SitioWeb*> temp(n, nullptr);
     #pragma omp parallel for schedule(static)
@@ -161,64 +222,94 @@ void Navegador::cargarArchivoSitiosWebCSV(const std::string& rutaArchivo) {
             temp[i] = new SitioWeb(url, titulo, dominio);
     }
 
-    // FASE 3 (serial): consolidación — vector no es thread-safe para push_back
-    for (auto s : temp)
-        if (s) sitios.push_back(s);
+    // FASE 3 — serial: consolidar al vector principal
+    for (auto s : temp) if (s) sitios.push_back(s);
+}
+```
+**Cambio clave:** separar IO (serial obligatorio) del parseo/construcción de objetos (paralelo seguro).
+
+---SLIDE 7D — FUNCIÓN 4: busquedaPalabraClave---
+
+# Función 4 — `busquedaPalabraClave()`
+
+### ANTES (secuencial)
+```cpp
+std::string Historial::busquedaPalabraClave(const std::string& palabraClave) {
+    std::string resultado;
+    for (auto it = sitiosVisitados.begin(); it != sitiosVisitados.end(); ++it) {
+        std::string titulo = (*it)->getTitulo();
+        std::string url    = (*it)->getUrl();
+        std::transform(titulo.begin(), titulo.end(), titulo.begin(), ::tolower);
+        std::transform(url.begin(), url.end(), url.begin(), ::tolower);
+        std::string kw = palabraClave;
+        std::transform(kw.begin(), kw.end(), kw.begin(), ::tolower);
+        if (titulo.find(kw) != std::string::npos || url.find(kw) != std::string::npos)
+            resultado += (*it)->toString() + "\n";
+    }
+    return resultado;
 }
 ```
 
----
-
-### Función 4 — `busquedaPalabraClave()` en `Historial.cpp`
-
-Búsqueda sobre el historial de la pestaña activa. Patrón: pre-indexar lista en vector, `parallel for`, reducción.
-
+### DESPUÉS (paralelo)
 ```cpp
-// FUNCION PARALELIZADA 4: busquedaPalabraClave
 std::string Historial::busquedaPalabraClave(const std::string& palabraClave) {
+    // std::list no tiene acceso aleatorio → copiamos a vector primero
     std::vector<SitioWeb*> vec(sitiosVisitados.begin(), sitiosVisitados.end());
     int n = (int)vec.size();
     std::vector<std::string> partes(n);
-    std::vector<bool> coincide(n, false);
+    std::vector<bool>        coincide(n, false);
 
     #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < n; i++) {
         std::string titulo = vec[i]->getTitulo();
         std::string url    = vec[i]->getUrl();
         std::transform(titulo.begin(), titulo.end(), titulo.begin(), ::tolower);
-        std::transform(url.begin(),   url.end(),   url.begin(),   ::tolower);
+        std::transform(url.begin(), url.end(), url.begin(), ::tolower);
         std::string kw = palabraClave;
         std::transform(kw.begin(), kw.end(), kw.begin(), ::tolower);
         if (titulo.find(kw) != std::string::npos || url.find(kw) != std::string::npos) {
-            partes[i] = vec[i]->toString();
+            partes[i]   = vec[i]->toString();
             coincide[i] = true;
         }
     }
 
     std::string resultado;
-    for (int i = 0; i < n; i++)
-        if (coincide[i]) resultado += partes[i] + "\n";
+    for (int i = 0; i < n; i++) if (coincide[i]) resultado += partes[i] + "\n";
     return resultado;
 }
 ```
+**Cambio clave:** `std::list` no tiene iterador aleatorio (necesario para `parallel for`), así que se pre-indexa en un `vector` antes del bloque paralelo.
 
----
+---SLIDE 7E — FUNCIÓN 5: limpiarSitiosViejos---
 
-### Función 5 — `limpiarSitiosViejos()` en `Historial.cpp`
+# Función 5 — `limpiarSitiosViejos()`
 
-Limpieza de entradas expiradas. Patrón: 2 fases (evaluación paralela + borrado secuencial), porque `std::list` no es thread-safe para erase.
-
+### ANTES (secuencial)
 ```cpp
-// FUNCION PARALELIZADA 5: limpiarSitiosViejos (2 fases)
 bool Historial::limpiarSitiosViejos() {
     if (sitiosVisitados.empty() || tiempoMaximo <= 0) return false;
+    bool huboLimpieza = false;
+    auto ahora = std::chrono::system_clock::now();
+    for (auto it = sitiosVisitados.begin(); it != sitiosVisitados.end(); ) {
+        auto diff = std::chrono::duration_cast<std::chrono::seconds>(
+            ahora - (*it)->getFechaVisita()).count();
+        if (diff > tiempoMaximo) { it = sitiosVisitados.erase(it); huboLimpieza = true; }
+        else ++it;
+    }
+    return huboLimpieza;
+}
+```
 
+### DESPUÉS (2 fases: evaluación paralela + borrado serial)
+```cpp
+bool Historial::limpiarSitiosViejos() {
+    if (sitiosVisitados.empty() || tiempoMaximo <= 0) return false;
     std::vector<SitioWeb*> vec(sitiosVisitados.begin(), sitiosVisitados.end());
     int n = (int)vec.size();
     std::vector<bool> expirado(n, false);
     auto ahora = std::chrono::system_clock::now();
 
-    // FASE 1 (paralelo): evaluar cuáles están expirados
+    // FASE 1 — paralelo: evaluar cuáles expiraron (solo lectura)
     #pragma omp parallel for
     for (int i = 0; i < n; i++) {
         auto diff = std::chrono::duration_cast<std::chrono::seconds>(
@@ -226,7 +317,7 @@ bool Historial::limpiarSitiosViejos() {
         expirado[i] = (diff > tiempoMaximo);
     }
 
-    // FASE 2 (serial): borrar — std::list no es thread-safe
+    // FASE 2 — serial: borrar de la lista (std::list::erase no es thread-safe)
     bool huboLimpieza = false;
     auto it = sitiosVisitados.begin();
     for (int i = 0; i < n; i++, ++it) {
@@ -235,172 +326,92 @@ bool Historial::limpiarSitiosViejos() {
     return huboLimpieza;
 }
 ```
+**Cambio clave:** `std::list::erase` modifica punteros internos de la lista y no puede ejecutarse en paralelo. Se separa la evaluación (paralela, solo lectura) del borrado (serial, escritura).
 
----
+---SLIDE 8 — HILOS: LEY DE AMDAHL---
 
-## 4. Justificación del número de hilos (Ley de Amdahl)
+# ¿Cuántos hilos? — Ley de Amdahl
 
-### La Ley de Amdahl
+**Fórmula:** `S(n) = 1 / ((1 - p) + p/n)`
+**Fracción paralela estimada:** `p = 0.85` (cargarCSV = 79.6 % del tiempo total)
 
-$$S(n) = \frac{1}{(1 - p) + \frac{p}{n}}$$
+| Hilos (n) | Speedup teórico |
+|-----------|----------------|
+| 1 | 1.00× |
+| 2 | 1.54× |
+| **4** | **2.35×** ← elegido |
+| 8 | 3.08× |
+| 16 | 3.76× |
+| ∞ | 6.67× (límite) |
 
-Donde:
-- `S(n)` = speedup teórico con `n` hilos
-- `p` = fracción paralela del código
-- `(1 - p)` = fracción serial inamovible
-
-### Estimación de `p` para este proyecto
-
-Analizando el tiempo total secuencial, `cargarArchivoSitiosWebCSV()` representa el 79.6 % del tiempo. Las otras 4 funciones suman el 20.4 %, con fracción serial de cada una (IO, sincronización, reducción) de aproximadamente 30 %.
-
-**Estimación conservadora**: fracción paralela `p ≈ 0.85`
-
-### Speedup teórico con distintos números de hilos
-
-| Hilos (n) | Fórmula | Speedup teórico S(n) |
-|-----------|---------|----------------------|
-| 1 | 1 / (0.15 + 0.85/1) | 1.00× |
-| 2 | 1 / (0.15 + 0.85/2) | 1.54× |
-| 4 | 1 / (0.15 + 0.85/4) | **2.35×** |
-| 8 | 1 / (0.15 + 0.85/8) | 3.08× |
-| 16 | 1 / (0.15 + 0.85/16) | 3.76× |
-| ∞ | 1 / 0.15 | 6.67× (límite) |
-
-```
-Speedup
-  4.0 |                                                    ___________
-      |                                            _______
-  3.0 |                                    _______
-      |                            _______
-  2.0 |                    _______
-      |            _______
-  1.0 |___________
-      +----+----+----+----+----+----+----+----> Hilos
-      0    2    4    6    8   10   12   14   16
-```
-
-### Elección: 4 hilos
-
-- **Rendimiento decreciente**: pasar de 4 a 8 hilos solo añade 0.73× más speedup, mientras que de 1 a 4 se ganan 1.35×.
-- **Alineado con hardware**: 4 hilos corresponde a los núcleos físicos típicos de una laptop de estudiante.
-- **Overhead mínimo**: el scheduler del SO puede mapear 4 hilos sobre 4 núcleos sin contención de contexto.
-- **Costo-beneficio óptimo**: el punto de inflexión de la curva de Amdahl para p=0.85 está en ~4 hilos.
+### ¿Por qué 4?
+- De 1 a 4 hilos: ganancia de **+1.35×**
+- De 4 a 8 hilos: ganancia de solo **+0.73×** (rendimiento decreciente)
+- 4 hilos = núcleos físicos típicos de una laptop → sin contención de contexto
+- Punto de inflexión de la curva para p = 0.85
 
 ```cpp
-// Configuración en Source.cpp
+// Source.cpp — versión paralela
 omp_set_num_threads(4);
 ```
 
----
+---SLIDE 9 — COMPARACIÓN DE TIEMPOS---
 
-## 5. Comparación de tiempos reales (3 corridas cada versión)
+# Comparación de tiempos reales
+### Benchmark: 1 000 sitios, 10 pestañas × 100 páginas · 3 corridas · g++ -O2
 
-Los benchmarks se compilaron con `-O2` y se ejecutaron sobre la misma máquina (Windows 11, g++ 15.2.0 MinGW), con 1 000 sitios en la BD y 10 pestañas × 100 páginas.
+| Función | Secuencial (1h) | Paralelo (4h) | Speedup |
+|---------|----------------|---------------|---------|
+| busquedaMasiva | 0.421 ms | 0.302 ms | **1.39×** |
+| busquedaPalabraClave | 0.022 ms | 0.091 ms | 0.24× ⚠ |
+| limpiarSitiosViejos | 0.010 ms | 0.768 ms | 0.013× ⚠ |
+| cargarArchivoSitiosWebCSV | 1.894 ms | 1.471 ms | **1.29×** |
+| toString | 0.033 ms | 0.025 ms | **1.35×** |
+| **TOTAL** | **2.380 ms** | **2.657 ms** | **0.90×** |
 
-### Tiempos por corrida — versión secuencial (1 hilo)
+**Speedup teórico Amdahl (p=0.85, n=4):** 2.35×
+**Speedup real medido:** 0.90×
 
-| Función | Corrida 1 | Corrida 2 | Corrida 3 | **Promedio** |
-|---------|-----------|-----------|-----------|-------------|
-| busquedaMasiva | 0.3790 ms | 0.3830 ms | 0.5000 ms | **0.421 ms** |
-| busquedaPalabraClave | 0.0230 ms | 0.0200 ms | 0.0230 ms | **0.022 ms** |
-| limpiarSitiosViejos | 0.0170 ms | 0.0070 ms | 0.0060 ms | **0.010 ms** |
-| cargarArchivoSitiosWebCSV | 1.8430 ms | 1.8740 ms | 1.9660 ms | **1.894 ms** |
-| toString | 0.0390 ms | 0.0290 ms | 0.0320 ms | **0.033 ms** |
-| **Total** | 2.3010 ms | 2.3130 ms | 2.5270 ms | **2.380 ms** |
+⚠ El overhead de crear y sincronizar 4 hilos supera al tiempo de cómputo cuando hay solo 100–1000 elementos. Con 50 000+ elementos los resultados serían distintos.
 
-### Tiempos por corrida — versión paralela (4 hilos OpenMP)
+---SLIDE 10 — ¿POR QUÉ EL OVERHEAD GANÓ?---
 
-| Función | Corrida 1 | Corrida 2 | Corrida 3 | **Promedio** |
-|---------|-----------|-----------|-----------|-------------|
-| busquedaMasiva | 0.3910 ms | 0.2670 ms | 0.2490 ms | **0.302 ms** |
-| busquedaPalabraClave | 0.1010 ms | 0.0870 ms | 0.0860 ms | **0.091 ms** |
-| limpiarSitiosViejos | 0.8150 ms | 0.7200 ms | 0.7700 ms | **0.768 ms** |
-| cargarArchivoSitiosWebCSV | 1.5140 ms | 1.4800 ms | 1.4180 ms | **1.471 ms** |
-| toString | 0.0340 ms | 0.0210 ms | 0.0190 ms | **0.025 ms** |
-| **Total** | 2.8550 ms | 2.5750 ms | 2.5420 ms | **2.657 ms** |
+# ¿Por qué no hubo speedup general?
 
----
+### 3 razones concretas
 
-## 6. Tabla comparativa de resultados
+**1. Dataset demasiado pequeño**
+OpenMP tarda ~50–200 µs en crear y coordinar 4 hilos. Con 1 000 elementos de operaciones simples (comparar strings cortos), cada hilo hace microsegundos de trabajo. El overhead domina.
 
-| # | Función | Seq (ms) | Par 4h (ms) | Speedup | Observación |
-|---|---------|----------|-------------|---------|-------------|
-| 1 | busquedaMasiva | 0.421 | 0.302 | **1.39×** | Mejora real — dataset grande, trabajo uniforme |
-| 2 | busquedaPalabraClave | 0.022 | 0.091 | 0.24× | Overhead domina — solo 100 elementos |
-| 3 | limpiarSitiosViejos | 0.010 | 0.768 | 0.013× | Overhead severo — `std::list` fuerza 2 fases |
-| 4 | cargarArchivoSitiosWebCSV | 1.894 | 1.471 | **1.29×** | Mejora real — parseo de 1 000 objetos paralelo |
-| 5 | toString | 0.033 | 0.025 | **1.35×** | Mejora leve — concatenación paralela |
-| — | **Total** | **2.380** | **2.657** | **0.90×** | Overhead neto supera beneficio en dataset pequeño |
+**2. `std::list` fuerza 3 pases en vez de 1**
+`limpiarSitiosViejos` hace: copiar lista → evaluar en paralelo → borrar secuencial. El secuencial hace un solo pase. Con pocos elementos el costo se triplica.
 
-### Análisis del speedup real vs teórico
+**3. Caché de CPU**
+1 000 punteros × 8 bytes = 8 KB → entra entero en L1. El secuencial tiene acceso lineal perfecto. Cuatro hilos fragmentan el acceso y generan más cache misses.
 
-```
-Speedup teórico (Amdahl, p=0.85): 2.35×
-Speedup real medido (promedio):    0.90×
-```
+### ¿Cuándo sí daría speedup?
+Con **50 000+ sitios**, el tiempo de cómputo supera al overhead y las mejoras predichas por Amdahl se materializan.
 
-La brecha entre teoría y práctica se debe a:
+---SLIDE 11 — CONCLUSIÓN---
 
-1. **Dataset pequeño** (1 000 sitios): el costo de crear y sincronizar 4 hilos con `omp_set_num_threads(4)` + la barrera implícita al final del `parallel for` es comparable al tiempo de cómputo mismo. OpenMP muestra su beneficio con decenas de miles de elementos.
+# Conclusión
 
-2. **Overhead de `std::list`**: `limpiarSitiosViejos` requiere copiar la lista a vector antes del paso paralelo y luego iterar la lista secuencialmente para borrar — tres pases donde el secuencial hace uno.
+### ¿Fue una buena elección para paralelizar?
 
-3. **Critical sections en `buscarPaginaWeb`**: el patrón de early-exit con `flush + critical` introduce puntos de sincronización frecuentes que reducen el paralelismo efectivo.
+**Sí — por estas razones:**
 
-4. **Caché de CPU**: 1 000 punteros × 8 bytes = 8 KB — cabe entero en L1. El secuencial, con acceso puramente lineal, produce menos cache misses que múltiples hilos accediendo a rangos fragmentados.
+1. **Demostró los límites reales** del paralelismo: la Ley de Amdahl predice el techo teórico, pero el overhead práctico es igualmente importante. Esta brecha entre teoría y práctica es la lección más valiosa del ejercicio.
 
----
+2. **El patrón de datos era correcto** — búsquedas sobre colecciones de elementos independientes son el caso de uso canónico de `parallel for`. La estructura del proyecto lo permitía limpiamente.
 
-## 7. Conclusión
+3. **Mejoramos la calidad del código** más allá del rendimiento:
+   - `ConfigHistorial` ahora es thread-safe con double-checked locking
+   - Las funciones de búsqueda son más explícitas sobre sus dependencias de datos
+   - El pipeline IO/cómputo en `cargarCSV` separa responsabilidades correctamente
 
-### Lo que se logró
+4. **Revelamos una deuda técnica del curso original**: la prohibición de hilos en EIF207 protegía la complejidad del proyecto, pero dejó código con patrones que escalan mal. OpenMP mostró exactamente dónde.
 
-Se implementaron con éxito **5 funciones paralelizadas** usando OpenMP en la versión paralela del simulador, siguiendo tres patrones distintos de paralelismo de datos:
+5. **Con datos reales de producción** (50 000+ sitios), `busquedaMasiva` y `cargarArchivoSitiosWebCSV` mostrarían el speedup predicho de ~2×, justificando la paralelización en un contexto de despliegue real.
 
-- `parallel for` simple con pre-indexado (`busquedaMasiva`, `busquedaPalabraClave`, `toString`)
-- `parallel for` con `critical` y early-exit (`buscarPaginaWeb`)
-- Pipeline serial-paralelo-serial (`cargarArchivoSitiosWebCSV`)
-- 2 fases paralelo-serial para estructuras no thread-safe (`limpiarSitiosViejos`)
-
-El singleton `ConfigHistorial` fue refactorizado con **doble verificación y mutex** para ser seguro en entornos multihilo.
-
-### La lección más importante
-
-Los resultados reales muestran que **la paralelización no siempre mejora el rendimiento**. Con 1 000 elementos, el overhead de OpenMP supera al beneficio del cómputo paralelo en la mayoría de las funciones. Esto confirma el principio fundamental: la Ley de Amdahl da el **límite teórico**, pero el speedup práctico también depende de:
-
-- El costo de creación y sincronización de hilos
-- La cantidad de trabajo por hilo
-- Los patrones de acceso a memoria (caché)
-- Las restricciones de thread-safety de las estructuras de datos
-
-Para obtener el speedup teórico de 2.35× que predice Amdahl con p=0.85 y 4 hilos, el dataset tendría que ser **del orden de 50 000–100 000 sitios** para que el tiempo de cómputo domine sobre el overhead de coordinación.
-
-### Comparación de arquitecturas
-
-| Aspecto | Versión Secuencial | Versión Paralela |
-|---------|-------------------|------------------|
-| Hilos | 1 | 4 (omp_set_num_threads) |
-| ConfigHistorial | Singleton simple | Singleton thread-safe (mutex) |
-| Algoritmos | std::find_if, loops simples | #pragma omp parallel for |
-| cargarCSV | While/getline lineal | Pipeline 3 fases |
-| limpiarHistorial | Erase en un pase | 2 fases: eval paralela + erase serial |
-| busquedaMasiva | Loop for simple | parallel for + compactación |
-| Tiempo total (1K sitios) | 2.38 ms | 2.66 ms |
-| Speedup proyectado (100K sitios) | — | ~2.0–2.3× |
-
-### Archivos del proyecto
-
-```
-proyecto-paralela/
-├── version-secuencial/   ← versión sin OpenMP + benchmark_secuencial
-│   ├── compilar.bat      ← compila e inicia el navegador
-│   └── benchmark.bat     ← compila y corre el benchmark de rendimiento
-├── version-paralela/     ← versión con OpenMP (4 hilos) + benchmark_paralelo
-│   ├── compilar.bat      ← compila e inicia el navegador paralelo
-│   └── benchmark.bat     ← compila y corre el benchmark paralelo
-└── comparar.bat          ← diff entre ambas versiones
-```
-
----
-
-*Ejecutado el 2026-05-18 con g++ 15.2.0 (MinGW), Windows 11 Enterprise, -O2.*
+> El aprendizaje no estuvo en hacer el programa más rápido con 1 000 sitios —
+> estuvo en entender **por qué** no fue más rápido, y **cuándo** sí lo sería.

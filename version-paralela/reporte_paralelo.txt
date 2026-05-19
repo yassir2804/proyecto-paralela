@@ -1,0 +1,9 @@
+REPORTE DE RENDIMIENTO - VERSION PARALELA (4 hilos OpenMP)
+--------------------------------------------------------------------------
+1. busquedaMasiva("noticias") | 1000 elementos | 0.2490 ms
+2. busquedaPalabraClave("tech") | 100 elementos | 0.0860 ms
+3. limpiarSitiosViejos() | 1000 elementos | 0.7700 ms
+4. cargarArchivoSitiosWebCSV() | 1000 elementos | 1.4180 ms
+5. toString() via mostrarPestaniaActual() | 100 elementos | 0.0190 ms
+--------------------------------------------------------------------------
+TIEMPO TOTAL: 2.5420 ms

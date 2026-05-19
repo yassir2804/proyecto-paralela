@@ -1,7 +1,12 @@
 #include "Historial.h"
 #include "ConfigHistorial.h"
-#include <sstream>
 #include <algorithm>
+#include <chrono>
+#include <iostream>
+#include <omp.h>
+#include <sstream>
+#include <unordered_set>
+#include <vector>
 
 
 Historial::Historial() : posicionActual(historial.end()), filtro("") 
@@ -23,7 +28,7 @@ void Historial::add(SitioWeb* sitioWeb)
 {
 
     //El proceso de aniadir es el siguiente
-    //Si la lista está vacía, se añade el sitio web de manera directa
+    //Si la lista estï¿½ vacï¿½a, se aï¿½ade el sitio web de manera directa
 
     if (historial.empty()) {
         historial.push_back(new SitioWeb(*sitioWeb));
@@ -32,7 +37,7 @@ void Historial::add(SitioWeb* sitioWeb)
         return;
     }
 
-    //si no esta vacía mediante este metodo se le busca y elimina si ya existe
+    //si no esta vacï¿½a mediante este metodo se le busca y elimina si ya existe
 
     eliminarSitioSiExiste(sitioWeb);
 
@@ -46,7 +51,7 @@ void Historial::add(SitioWeb* sitioWeb)
     }
 
     //Una vez se elimina el primer sitio web (o no en caso de que no haya maximo de entradas o no se halla llegado al maximo de entradas)
-    //Se añade el sitio web al final de la lista de historial
+    //Se aï¿½ade el sitio web al final de la lista de historial
 
     historial.push_back(new SitioWeb(*sitioWeb));
     posicionActual = std::prev(historial.end());
@@ -155,6 +160,7 @@ void Historial::limpiarHistorial()
 
 std::string Historial::busquedaPalabraClave(const std::string& palabraClave) const
 {
+    auto startTime = std::chrono::high_resolution_clock::now();
     std::stringstream s;
     int contador = 1;
     std::string palabraFiltrada = palabraClave;
@@ -164,29 +170,40 @@ std::string Historial::busquedaPalabraClave(const std::string& palabraClave) con
 
     transform(palabraFiltrada.begin(), palabraFiltrada.end(), palabraFiltrada.begin(), ::tolower);
 
-    // Recorremos todos los sitios webs en el historial
+    std::vector<SitioWeb*> vec(historial.begin(), historial.end());
+    std::vector<std::string> partes(vec.size());
+    std::vector<bool> coincide(vec.size(), false);
 
-    for (SitioWeb* sitio : historial) {
-        if (sitio != nullptr) {
+#pragma omp parallel for schedule(dynamic)
+    for (int i = 0; i < (int)vec.size(); i++) {
+        SitioWeb* sitio = vec[i];
+        if (sitio == nullptr) {
+            continue;
+        }
 
-            // Obtenemos el titulo del sitio web y lo convertimos a minusculas
-            // dentro del historial 
+        std::string tituloSitio = sitio->getTitulo();
+        std::transform(tituloSitio.begin(), tituloSitio.end(), tituloSitio.begin(), ::tolower);
 
-            std::string tituloSitio = sitio->getTitulo();
-            transform(tituloSitio.begin(), tituloSitio.end(), tituloSitio.begin(), ::tolower);
-
-            // Si cumple la condicion de que la palabra clave esta en el titulo del sitio web
-            // procedemos a mostrar la coincidencia 
-
-            if (tituloSitio.find(palabraFiltrada) != std::string::npos) {
-                s << "------------------------------------------------------" << std::endl;
-                s << " COINCIDENCIA # " << contador << std::endl;
-                s << sitio->toString() << std::endl;
-                contador++;
-                s << "------------------------------------------------------" << std::endl;
-            }
+        if (tituloSitio.find(palabraFiltrada) != std::string::npos) {
+            partes[i] = sitio->toString();
+            coincide[i] = true;
         }
     }
+
+    for (size_t i = 0; i < partes.size(); i++) {
+        if (coincide[i]) {
+            s << "------------------------------------------------------" << std::endl;
+            s << " COINCIDENCIA # " << contador << std::endl;
+            s << partes[i] << std::endl;
+            contador++;
+            s << "------------------------------------------------------" << std::endl;
+        }
+    }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+    std::cout << "[Tiempo] Historial::busquedaPalabraClave: " << elapsedUs << " us" << std::endl;
+
     return s.str();
 }
 
@@ -204,12 +221,27 @@ SitioWeb* Historial::getSitioActual() const
 }
 
 std::string Historial::toString() const {
+    auto startTime = std::chrono::high_resolution_clock::now();
     std::stringstream ss;
     ss << "Historial:\n";
 
-    for (const auto sitio : historial) {
-        ss << sitio->toString() << "\n";
+    std::vector<SitioWeb*> vec(historial.begin(), historial.end());
+    std::vector<std::string> partes(vec.size());
+
+#pragma omp parallel for
+    for (int i = 0; i < (int)vec.size(); i++) {
+        if (vec[i] != nullptr) {
+            partes[i] = vec[i]->toString() + "\n";
+        }
     }
+
+    for (const auto& parte : partes) {
+        ss << parte;
+    }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+    std::cout << "[Tiempo] Historial::toString: " << elapsedUs << " us" << std::endl;
 
     return ss.str();
 }
@@ -261,13 +293,17 @@ void Historial::ajustarTamanoHistorial()
     }
     // Si la posicion actual fue eliminada, la movemos al final
     if (posicionActualEliminada || posicionActual == historial.end()) {
-        posicionActual = --historial.end();  // Movemos la posicion actual al final
+        posicionActual = --historial.end();  // Movemos la posicion actual alï¿½final
     }
 }
 
 bool Historial::limpiarSitiosViejos()
 {
+    auto startTime = std::chrono::high_resolution_clock::now();
     if (historial.empty()) {
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+        std::cout << "[Tiempo] Historial::limpiarSitiosViejos: " << elapsedUs << " us" << std::endl;
         return false; 
     }
 
@@ -276,48 +312,70 @@ bool Historial::limpiarSitiosViejos()
 
     int tiempoMaximo = ConfigHistorial::getInstancia()->getTiempoMaximo();
     if (tiempoMaximo <= 0) {
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+        std::cout << "[Tiempo] Historial::limpiarSitiosViejos: " << elapsedUs << " us" << std::endl;
         return false; 
     }
 
     //Este es un valor bool que se retornara para saber si se eliminaron entradas del historial
     bool entradasBorradas = false;
 
-    auto posicionOriginal = posicionActual;
+    bool posicionActualEliminada = false;
 
     //Guardamos la posicion actual debido a que si se elimina el sitio al que esta apuntando
     //Puede quedar en una posicion ivalida asi que guardamos la posicion actual para luego asignarla
 
-    //Recorremos el historial y eliminamos las entradas que tengan un tiempo mayor al tiempo maximo configurado
+    std::vector<SitioWeb*> vec(historial.begin(), historial.end());
+    std::vector<bool> expirado(vec.size(), false);
+
+    auto now = std::chrono::system_clock::now();
+
+#pragma omp parallel for
+    for (int i = 0; i < (int)vec.size(); i++) {
+        SitioWeb* sitio = vec[i];
+        if (sitio == nullptr) {
+            continue;
+        }
+
+        double diff = static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(now - sitio->getTiempoDeIngreso()).count());
+        expirado[i] = (diff > tiempoMaximo);
+    }
+
+    std::unordered_set<SitioWeb*> expirados;
+    expirados.reserve(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        if (expirado[i]) {
+            expirados.insert(vec[i]);
+        }
+    }
 
     for (auto it = historial.begin(); it != historial.end(); ) {
-
         SitioWeb* sitio = *it;
-
-        // Calculamos la diferencia en segundos entre el tiempo actual y el tiempo de ingreso del sitio web
-
-        double diff = static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - sitio->getTiempoDeIngreso()).count());
-
-        // Si la diferencia de tiempo es mayor que el tiempo máximo configurado se elimina la entrada
-
-        if (diff > tiempoMaximo) {
+        if (expirados.find(sitio) != expirados.end()) {
+            if (it == posicionActual) {
+                posicionActualEliminada = true;
+                posicionActual = historial.end();
+            }
             delete sitio;
-            it = historial.erase(it); 
-            entradasBorradas = true; 
+            it = historial.erase(it);
+            entradasBorradas = true;
+            continue;
         }
-        else {
-            ++it; 
-
-
-        }
+        ++it;
     }
 
 
     if (historial.empty()) {
         posicionActual = historial.end(); //Si el historial esta vacio la posicion actual sera el final
     }
-    else if (posicionActual == historial.end() || posicionActual == posicionOriginal) {
-        posicionActual = --historial.end(); //Si la posicion actual es el final o es igual a la posicion original entonces se le asigna el ultimo sitio web
+    else if (posicionActualEliminada || posicionActual == historial.end()) {
+        posicionActual = --historial.end(); //Si la posicion actual es el final o fue eliminada entonces se le asigna el ultimo sitio web
     }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+    std::cout << "[Tiempo] Historial::limpiarSitiosViejos: " << elapsedUs << " us" << std::endl;
 
     return entradasBorradas; 
 }

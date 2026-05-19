@@ -1,6 +1,7 @@
 #pragma once
-#include <iostream>
 #include <fstream>
+#include <iostream>
+#include <mutex>
 
 class ConfigHistorial
 {
@@ -8,6 +9,7 @@ private:
 	int maxEntradas;
 	int tiempoMaximo;
 	static ConfigHistorial* instancia;
+	static std::mutex instanciaMutex;
 	ConfigHistorial();
 
 

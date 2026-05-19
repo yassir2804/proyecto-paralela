@@ -3,6 +3,10 @@
 *.pdb
 *.ilk
 *.idb
+*.bin
+*.dat
+reporte_*.txt
+sesion.dat
 tmpclaude-*
 nul
 .vs/

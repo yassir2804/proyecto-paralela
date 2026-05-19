@@ -37,7 +37,7 @@ main() → Controladora::control0() [bucle principal]
 
 | Aspecto | Detalle |
 |---------|---------|
-| Curso | Programación Paralela — UNA |
+| Curso | Estructuras de Datos — UNA |
 | Nivel del equipo | C++ intermedio (punteros, herencia, STL) |
 | Paradigma base | Programación orientada a objetos, MVC |
 | Plataforma | Windows (usa `<windows.h>`, `PeekConsoleInput`) |
